@@ -2,7 +2,7 @@
 [![Apache-2.0 license](https://img.shields.io/badge/License-Apache_2.0-green.svg?style=flat-square)](https://www.apache.org/licenses/LICENSE-2.0)
 [![ESP32](https://img.shields.io/badge/ESP-32-green.svg?style=flat-square)](https://www.espressif.com/en/products/socs/esp32)
 
-The project consists of the implementation of the modbus protocol over serial interface to get the measures from two wattmeters and translating the data into MQTT publish messages sent to a MQTT broker such as [Mosquitto](https://https://mosquitto.org/).
+The project consists of the implementation of the modbus protocol over serial interface to get the measures from two wattmeters and translating the data into MQTT publish messages sent to a MQTT broker such as [Mosquitto](https://mosquitto.org).
 
 
 ## The problem to solve
