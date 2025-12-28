@@ -115,7 +115,7 @@ The DDSU666H responds
 ```
 
 ### DDSU666-H register map
-Observed, not from manufactured spec.
+Observed, not from manufacturer spec.
 
 | Register       | Value          | Units                            |
 | -------------- | -------------- | -------------------------------- |
@@ -170,6 +170,31 @@ And if you want, modify the MQTT device name.
 ```
 #define DEVICE_MQTT_NAME	"modbus2mqtt"
 ```
+
+## REST API
+Version 2 adds a Rest API interface so that data can be retrieved via MQTT PUBLISH messages or as a WEB service available at <device_ip>:80.
+To get the information include the following json as payload: 
+
+{"type":"data_request","key":"qWpJnwA0crlmgv"}
+
+“key” – is a shared key added for security.
+
+“type” – can be either “data_request” to retrieve the measures or "device_info" to get some perfomance information such WiFi and TCP connection lost count and TCP and MQTT connection status.
+
+You can test the Rest API with CURL as follows:
+
+```console
+curl  -X GET http://192.168.1.110:80 -d '{"type":"data_request","key":"qWpJnwA0crlmgv"}'
+{"DDSU666H":{"v":"233.50","c":"1.81","ap":"306.90","rp":"-291.40"},"SDM120CT":{"v":"233.20","c":"8.14","ap":"1867.70","rp":"5.30"}}
+```
+
+```console
+curl  -X GET http://192.168.1.110:80 -d '{"type":"device_info","key":"qWpJnwA0crlmgv"}'
+{"TCP":"ok","MQTT":"ok","WIFIlost":"0","TCPlost":"0"}
+```
+The IP address of the device is reported via MQTT in the first PUBLISH message as follows:
+
+{"ip":"192.168.1.110","MAC":"B0:A7:32:27:FF:5C"}
 
 
 ## Build
