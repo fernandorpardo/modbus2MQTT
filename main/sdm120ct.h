@@ -1,31 +1,10 @@
 #ifndef _SDM120CT_H_
 #define _SDM120CT_H_
 
-typedef enum  {INFO, DATA} SDM120CT_sequence_phase_t;
-extern SDM120CT_sequence_phase_t SDM120CT_sequence_phase;
-
-typedef struct SDM120CT_device_info_s
-{
-	float MeterID;
-	float Baudrate;
-	uint32_t Serialnumber;
-	uint16_t MeterCODE;
-	uint16_t SoftwareVersion;
-} SDM120CT_device_info_type;
-
-typedef struct SDM120CT_data_s
-{
-	float Voltage;
-	float Current;
-	float ApparentPower;
-	float ActivePower;
-	float ReactivePower;
-	float PowerFactor;
-	float Frecuency;
-} SDM120CT_data_type;
+#define SDM120CT_DATA_REFRESH_SEC	30	// Send the query list every x seconds
 
 /*
-sniffer samples
+samples
 
  1  4  0  0  0  2 71 CB  
  1  4  4 43 62  0  0 4F DE  
@@ -138,12 +117,34 @@ typedef struct modbus_holding_parameter_query_s
 	uint16_t Error_Check;
 } modbus_holding_parameter_query_type;
 
+// ------------------------------------------------------------------------------------------------
+// Exposed interface
+typedef enum  {INFO, DATA} SDM120CT_sequence_phase_t;
 
-void SDM120CT_data_init(void);
-void SDM120CT_info_printf(void);
-void SDM120CT_printf(void);
-char *SDM120CT_generate_json(char *json, size_t max_sz);
-void SDM120CT_rxdata_process (uint16_t query, uint8_t* data);
+typedef struct SDM120CT_device_info_s
+{
+	float MeterID;
+	float Baudrate;
+	uint32_t Serialnumber;
+	uint16_t MeterCODE;
+	uint16_t SoftwareVersion;
+} SDM120CT_device_info_type;
+
+typedef struct SDM120CT_data_s
+{
+	float Voltage;
+	float Current;
+	float ApparentPower;
+	float ActivePower;
+	float ReactivePower;
+	float PowerFactor;
+	float Frecuency;
+} SDM120CT_data_type;
+
+extern SDM120CT_device_info_type SDM120CT_device_info;
+extern SDM120CT_data_type SDM120CT_data;
+
+void SDM120CT_create(void (*callback) (SDM120CT_sequence_phase_t SDM120CT_sequence_phase), UBaseType_t uxPriority);
 
 #endif
 // END OF FILE

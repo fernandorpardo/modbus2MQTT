@@ -46,27 +46,29 @@
 #define DDSU666H_REG_POSITIVE_ACTIVE_ENERGY	0x4014		// Positive active energy
 //		DDSU666H_REG_POSITIVE_ACTIVE_ENERGY	0x4016	
 
+
+
+// ------------------------------------------------------------------------------------------------
+// Exposed interface
 typedef struct DDSU666H_data_s
 {
-	float Voltage;
-	float Current;
-	float ActivePower;
-	float ReactivePower;
-	float PowerFactor;
+	// 0x2000
+	float Voltage;										// Volts
+	float Current;										// Amperes
+	float ActivePower;									// Watts
+	float ReactivePower;								// VARs (Volt-Amperes Reactive)
+	float ApparentPower;								// Volt-Amperes
+	float PowerFactor;									// 
+	float Frecuency;									// Hz
 	// 0x4000
 	float ActiveInElectricity;
 	float NegativeActiveEnergy;
 	float PositiveActiveEnergy;	
 } DDSU666H_data_type;
 
-// extern DDSU666H_data_type DDSU666H_data;
+extern DDSU666H_data_type DDSU666H_data;
 
-
-void DDSU666H_data_init(void);
-void DDSU666H_printf(void);
-char *DDSU666H_generate_json(char *json, size_t max_sz);
-int DDSU666H_rxdata_process(uint8_t* data, int rxBytes, int ix0);
-
+void DDSU666H_create(UBaseType_t uxPriority);
 
 #endif
 // END OF FILE

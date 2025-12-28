@@ -7,8 +7,16 @@
  *  1.0.0 - May 2021
  *  1.1.0 - October 2022
  *  1.2.0 - November 2022
+ * - jsonParseObject deprecated
  *  1.2.1 - January 2023
+ * - XML parser clean-up
  *  1.2.2 - November 2024
+ * - fix cstr_replace
+ * - added jsonScan()
+ *  1.2.3 - August 2025
+ * - jsonParseValue added Square Bracket management (case "e.g. (3)" )for json array support
+ * - jsonScan fix, added size_t max_value_sz
+ *   unsigned int jsonScan(char*ptr, unsigned int pos0, unsigned int n, char* key, size_t max_key_sz, char* value, size_t max_value_sz)
  *
  ** ************************************************************************************************
 **/
@@ -19,6 +27,7 @@
 #include <unistd.h>
 
 #include "cstr.h"
+
 
 /** 
 * -------------------------------------------------------------------------------------------------
@@ -57,6 +66,7 @@ int cstr_find(char* str, char const* needle, int pos, int max_sz)
 
 void cstr_dump(char * bf, int nbytes)
 {
+	//fprintf(stdout,"\nn= %d\n", nbytes);
 	char str[32];
 	str[0]='\0';
 	int j=0;
@@ -78,6 +88,7 @@ void cstr_dump(char * bf, int nbytes)
 		while(j++<16) fprintf(stdout,"   ");
 		fprintf(stdout,"   %s\n", str);
 	}
+	//fprintf(stdout,"\n");
 }
 
 void cstr_fdump(FILE *fp, char * bf, int nbytes)
@@ -144,6 +155,113 @@ char* cstr_copy(char* dst, char* org , size_t dst_max_sz)
 	dst[i]= '\0';
 	return dst;
 } // cstr_copy
+
+
+/**
+ * ------------------------------------------------------------------------------------------------
+ *										JSON PARSER library
+ *
+ * https://javaee.github.io/tutorial/jsonp001.html
+ *
+ * JSON defines only two data structures: objects and arrays. An object is a set of name-value pairs, 
+ * and an array is a list of values. JSON defines seven value types: 
+ * string, number, object, array, true, false, and null.
+ *
+ * JSON has the following syntax.
+ * -  Objects are enclosed in braces ({}), their name-value pairs are separated by a comma (,), and 
+ *    the name and value in a pair are separated by a colon (:). Names in an object are strings, whereas 
+ *    values may be of any of the seven value types, including another object or an array.
+ * -  Arrays are enclosed in brackets ([]), and their values are separated by a comma (,). Each value 
+ *    in an array may be of a different type, including another array or an object.
+ * -  When objects and arrays contain other objects or arrays, the data has a tree-like structure.
+ * 
+**/
+
+/*
+e.g. (1)
+	"context":{"id":"01GE6KATDN0S5DQ90PMFKP7D77","parent_id":null,"user_id":null}
+	for input name= context
+	return a c-string in "value" with the 
+	value between brackets including the open&close brackets,i.e.,:
+	{"id":"01GE6KATDN0S5DQ90PMFKP7D77","parent_id":null,"user_id":null}
+
+e.g. (2)
+	"entity_id":"sun.sun"
+	for input name= entiry_id
+	return a c-string in variable <value> with the value "sun.sun" including the quotation marks
+e.g. (3)
+	"array":["item1","item2", ... ]
+*/
+char* jsonParseValue(const char *name, char*ptr, unsigned int pos0, unsigned int len,  char* value, size_t value_sz_max)
+{	
+	// PARSE JSON
+	unsigned int a= pos0, b=0;
+	char c;
+	value[0]= '\0';
+	
+	// move after first { or [ or spaces
+	for(c= ptr[a]; a<(pos0 + len) && (c== ' ' || c == '{' ); c=ptr[++a]);	
+	unsigned int i, j;
+	char str[512];
+	while(a < (pos0 + len))
+	{
+		//b= pos0 + len;
+		// get next name, look for colon symbol <:>	
+		for(i= a, j=0; ptr[i]!=':' && i<(pos0 + len) && j<(sizeof(str)-1); i++, j++) str[j]= ptr[i];
+		str[(i<(pos0 + len))? j : 0]= '\0';
+		
+		
+		//fprintf(stdout, "\n--- name %s %s", name, str);
+		
+		i++;
+		// <i> is pointing for the character after colon symbol <:>
+		// remove quotation marks "
+		cstr_replace(str,'"','\0');
+		cstr_replace(str,' ','\0');
+		//fprintf(stdout, "\n--- %s  %c", str, ptr[i]);
+
+
+			
+		b= i;
+		// position b at the end
+		int CurlyBracketCount= 0;	// { }
+		int SquareBracketCount= 0;	// [ ]
+		for(c= ptr[b]; b<(pos0 + len) ; c=ptr[++b])
+		{
+			if( c == '{') CurlyBracketCount ++;
+			else if( c == '}') 
+			{	
+				if(CurlyBracketCount == 1) {b++; break;}			
+				if(CurlyBracketCount == 0) {break;}
+				CurlyBracketCount--;
+			}
+			else if( c == '[') SquareBracketCount ++;
+			else if( c == ']') 
+			{	
+				if(SquareBracketCount == 1) {b++; break;}
+				//if(SquareBracketCount == 0) {break;}					
+				SquareBracketCount--;
+			}				
+			else if( c == ',' && SquareBracketCount==0 && CurlyBracketCount== 0) break;
+		}
+		// b points to the end og value: to , or }		
+			
+		// is the name I am searching?
+		if (strcmp(str, name)==0 )
+		{			
+			// then copy value and return
+			for(j=0; i<b && j<value_sz_max; i++, j++) value[j]= ptr[i];
+			value[j]= '\0';	
+			return value;
+		}
+		
+		// next
+		//for(c= ptr[i]; i<(pos0 + len) && c!=',' && c!='{'; c=ptr[++i]);
+		a= b + 1;
+		//a= i;
+	} 
+	return value;
+} // jsonParseValue
 
 
 // END OF FILE

@@ -56,62 +56,69 @@ power factor indicates that some of the power is reactive.
 
 #include <stdio.h>		// fprintf 
 #include <string.h>		// memcpy
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/uart.h"
+#include "driver/gpio.h"
+#include "esp_log.h"
+#include "esp_timer.h"		// esp_timer_get_time()
 
 #include "config.h"
 #include "modbus.h"
 #include "sdm120ct.h"
 
+static void (*SDM120CT_callback) (SDM120CT_sequence_phase_t SDM120CT_sequence_phase)= 0;
+
 SDM120CT_sequence_phase_t SDM120CT_sequence_phase;
 SDM120CT_device_info_type SDM120CT_device_info;
 SDM120CT_data_type SDM120CT_data;
 
-void SDM120CT_data_init(void)
+/**
+---------------------------------------------------------------------------------------------------
+		
+								   UART
+
+---------------------------------------------------------------------------------------------------
+**/
+static const int RX_BUF_SIZE = 128;
+// SDM120CT
+void SDM120CT_uart_init(void) 
 {
-	memset(&SDM120CT_data, 0, sizeof(struct SDM120CT_data_s));
-	memset(&SDM120CT_device_info, 0, sizeof(struct SDM120CT_device_info_s));
-}
+	// UART 1
+	uart_config_t uart_config_1 = {
+        .baud_rate = 9600,
+        .data_bits = UART_DATA_8_BITS,
+        .parity    = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_1, RX_BUF_SIZE * 2, 0, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(UART_NUM_1, &uart_config_1));
+	// esp_err_t uart_set_pin(uart_port_t uart_num, int tx_io_num, int rx_io_num, int rts_io_num, int cts_io_num)
+    ESP_ERROR_CHECK(uart_set_pin(UART_NUM_1, GPIO_NUM_14, GPIO_NUM_13, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+} // SDM120CT_uart_init()
 
-void SDM120CT_printf(void)
-{
-	fprintf(stdout, "\nSolar (SDM120CT)");
-	fprintf(stdout, "\nVoltage                %3.2f Volts", SDM120CT_data.Voltage);
-	fprintf(stdout, "\nCurrent                %3.2f Amps",  SDM120CT_data.Current);
-	fprintf(stdout, "\nActivePower            %3.2f Watts", SDM120CT_data.ActivePower);
-	fprintf(stdout, "\nApparentPower          %3.2f Watts", SDM120CT_data.ApparentPower);
-	fprintf(stdout, "\nReactivePower          %3.2f Var",   SDM120CT_data.ReactivePower);
-	fprintf(stdout, "\nPowerFactor            %3.2f", 	   SDM120CT_data.PowerFactor*1000.0);
-	fprintf(stdout, "\nFrecuency              %3.2f Hz",    SDM120CT_data.Frecuency);
-	fprintf(stdout, "\n");
-}
+/**
+---------------------------------------------------------------------------------------------------
+		
+								   
 
-void SDM120CT_info_printf(void)
-{
-	fprintf(stdout, "\nMeterID           %3.2f", SDM120CT_device_info.MeterID);
-	fprintf(stdout, "\nBaudrate          %3.2f", SDM120CT_device_info.Baudrate);
-	fprintf(stdout, "\nSerialnumber      %08lX", SDM120CT_device_info.Serialnumber);
-	fprintf(stdout, "\nMeterCODE         %04X",  SDM120CT_device_info.MeterCODE);
-	fprintf(stdout, "\nSoftwareVersion   %04X",  SDM120CT_device_info.SoftwareVersion);	
-	fprintf(stdout, "\n");	
-}
-
-char *SDM120CT_generate_json(char *json, size_t max_sz)
-{
-	snprintf(json, max_sz, "{\"SDM120CT\":{\"v\":\"%3.2f\",\"c\":\"%3.2f\",\"ap\":\"%3.2f\",\"rp\":\"%3.2f\"}}", 
-	SDM120CT_data.Voltage, SDM120CT_data.Current, SDM120CT_data.ActivePower, SDM120CT_data.ReactivePower
-	); 	
-	return json;
-} // SDM120CT_generate_json
-
-
-
+---------------------------------------------------------------------------------------------------
+**/
 void SDM120CT_rxdata_process (uint16_t query, uint8_t* data)
 {
+	// device info
 	if(SDM120CT_sequence_phase == INFO)
 	{
 		switch(query)
 		{
-			case SDM120CT_REG_METERID:	SDM120CT_device_info.MeterID= record2float(data+3); break;		
-			case SDM120CT_REG_BAUDRATE: SDM120CT_device_info.Baudrate= record2float(data+3);break;
+			case SDM120CT_REG_METERID:	
+				SDM120CT_device_info.MeterID= record2float(data+3); 
+				break;		
+			case SDM120CT_REG_BAUDRATE: 
+				SDM120CT_device_info.Baudrate= record2float(data+3);
+				break;
 			// 4 bytes / unsigned int32
 			// 01 03 04 01 CC 57 A6 85 BA
 			case SDM120CT_REG_SERIALNUMBER: 
@@ -122,29 +129,165 @@ void SDM120CT_rxdata_process (uint16_t query, uint8_t* data)
 			}
 			// 2 bytes Hex
 			// 01 03 04 00 21 00 00 AA 39 
-			case SDM120CT_REG_METERCODE: SDM120CT_device_info.MeterCODE= ENDIAN( *(uint16_t *)&(data[3]) ); break;
+			case SDM120CT_REG_METERCODE: 
+				SDM120CT_device_info.MeterCODE= ENDIAN( *(uint16_t *)&(data[3]) ); 
+				break;
 			// 2 bytes Hex
 			//  01 03 04 00 00 00 00 FA 33
-			case SDM120CT_REG_SOFTWAREVERSION: SDM120CT_device_info.SoftwareVersion= ENDIAN( *(uint16_t *)&(data[3]) ); break;
+			case SDM120CT_REG_SOFTWAREVERSION: 
+				SDM120CT_device_info.SoftwareVersion= ENDIAN( *(uint16_t *)&(data[3]) ); 
+				break;
 		}	
 	}
+	// Measurements
 	else
 	{
 		float value= record2float(data+3);
 		if(_VERBOSE_) fprintf(stdout, "\nvalue %3.2f", value);	
 		switch(query)
 		{
-			case SDM120CT_REG_VOLTAGE: 			SDM120CT_data.Voltage= value; break;
-			case SDM120CT_REG_CURRENT: 			SDM120CT_data.Current= value; break;
-			case SDM120CT_REG_ACTIVEPOWER: 		SDM120CT_data.ActivePower= value; break;
+			case SDM120CT_REG_VOLTAGE: 			SDM120CT_data.Voltage= value; 		break;
+			case SDM120CT_REG_CURRENT: 			SDM120CT_data.Current= value; 		break;
+			case SDM120CT_REG_ACTIVEPOWER: 		SDM120CT_data.ActivePower= value; 	break;
 			case SDM120CT_REG_APPARENTPOWER: 	SDM120CT_data.ApparentPower= value; break;
 			case SDM120CT_REG_REACTIVEPOWER: 	SDM120CT_data.ReactivePower= value; break;
-			case SDM120CT_REG_POWERFACTOR: 		SDM120CT_data.PowerFactor= value; break;
-			case SDM120CT_REG_FRECUENCY: 		SDM120CT_data.Frecuency= value; break;
+			case SDM120CT_REG_POWERFACTOR: 		SDM120CT_data.PowerFactor= value; 	break;
+			case SDM120CT_REG_FRECUENCY: 		SDM120CT_data.Frecuency= value; 	break;
 		}
 	}
 } // SDM120CT_rxdata_process
 
+/**
+---------------------------------------------------------------------------------------------------
+		
+								   TASKS
 
+---------------------------------------------------------------------------------------------------
+**/
+int64_t t0;
+int SDM120CT_query_index;
+uint16_t *SDM120CT_query_list;
+const uint16_t SDM120CT_data_query_list[]= {SDM120CT_REG_VOLTAGE, SDM120CT_REG_CURRENT, SDM120CT_REG_ACTIVEPOWER, SDM120CT_REG_APPARENTPOWER, SDM120CT_REG_REACTIVEPOWER, SDM120CT_REG_POWERFACTOR, SDM120CT_REG_FRECUENCY, 0xFFFF};
+const uint16_t SDM120CT_deviceinfo_query_list[]= {SDM120CT_REG_METERID, SDM120CT_REG_BAUDRATE, SDM120CT_REG_SERIALNUMBER, SDM120CT_REG_METERCODE, SDM120CT_REG_SOFTWAREVERSION, 0xFFFF};
+// int SDM120CT_send_query();
+
+int SDM120CT_send_query()
+{
+	if(SDM120CT_query_index<0 || SDM120CT_query_list[SDM120CT_query_index] == 0xFFFF)
+	{
+		if(SDM120CT_query_list[SDM120CT_query_index] == 0xFFFF) 
+			//SDM120CT_querylist_done();
+			SDM120CT_callback(SDM120CT_sequence_phase);
+		SDM120CT_query_index= -1;
+		int r= (SDM120CT_sequence_phase == INFO) ? 1 : 0;
+		SDM120CT_sequence_phase= DATA;
+		SDM120CT_query_list= ( uint16_t *) &SDM120CT_data_query_list;
+		return r;
+	}
+	if(SDM120CT_sequence_phase == INFO)
+	{
+		modbus_holding_parameter_query_type query = MODBUS_HOLDING_PARAMETER_DEFAULT(SDM120CT_deviceinfo_query_list[SDM120CT_query_index]);
+		query.Error_Check= CRC16( (uint8_t *) &query, sizeof(query) - 2 );
+		char *q= (char*)&query;
+		size_t sz= sizeof(query);
+		t0= esp_timer_get_time();
+		int txBytes= uart_write_bytes(UART_NUM_1, q, sz);
+		if(txBytes != (int) sz) printf("\n[ERROR] SDM120CT_send_queryTx uart_write_bytes %2d bytes", txBytes);	
+	}
+	else
+	{
+		modbus_master_query_type query = MODBUS_QUERY_DEFAULT(SDM120CT_data_query_list[SDM120CT_query_index]);
+		query.Error_Check= CRC16( (uint8_t *) &query, sizeof(query) - 2 );
+		char *q= (char*)&query;
+		size_t sz= sizeof(query);
+		t0= esp_timer_get_time();
+		int txBytes= uart_write_bytes(UART_NUM_1, q, sz);
+		if(txBytes != (int) sz) printf("\n[ERROR] SDM120CT_send_queryTx uart_write_bytes %2d bytes", txBytes);
+	}
+	return 0;	
+} // SDM120CT_send_query
+
+
+#define LOOP_DELAY_MS				1000
+#define SEC2LOOPS(x)				(x * 1000/LOOP_DELAY_MS)
+#define DATA_REFRESH_TIME			SEC2LOOPS(SDM120CT_DATA_REFRESH_SEC)	// Send the query list every x seconds
+
+
+void SDM120CT_TX_task(void *arg)
+{
+	int request_time_sec= 0;
+	while (1) 
+	{
+		if( -- request_time_sec <= 0 )
+		{
+			request_time_sec= DATA_REFRESH_TIME;
+			SDM120CT_query_index= 0;
+			SDM120CT_send_query();
+		}
+		// vTaskDelay() - Delays a task for a given number of ticks
+		// portTICK_PERIOD_MS - one tick period in milliseconds. The unit of portTICK_PERIOD_MS is milliseconds/ticks
+		vTaskDelay(1000 / portTICK_PERIOD_MS);	 // 1.000 ms = 1 sec 		
+	}
+} // SDM120CT_TX_task
+
+void SDM120CT_RX_task(void *arg)
+{
+    static const char *RX_TASK_TAG = "RX_TASK";
+    esp_log_level_set(RX_TASK_TAG, ESP_LOG_INFO);
+    uint8_t* data = (uint8_t*) malloc(RX_BUF_SIZE);
+    while (1) {
+        int rxBytes = uart_read_bytes(UART_NUM_1, data, RX_BUF_SIZE, 200 / portTICK_PERIOD_MS);
+        if (rxBytes > 0) 
+		{		
+			uint8_t Byte_Count= rxBytes>2? data[2] : 0;
+			if(Byte_Count+2 == rxBytes-3)
+			{
+				int64_t t1= esp_timer_get_time();
+				uint16_t ErrorCheck= data[8]<<8 | data[7];
+				uint16_t crc= CRC16( data, rxBytes - 2);
+				if(crc == ErrorCheck)
+				{
+					// SDM120CT_query_index == -1 means it is not a response to my request but traffic sniffed 
+					if(SDM120CT_query_index >= 0)
+					{
+						SDM120CT_rxdata_process(SDM120CT_query_list[SDM120CT_query_index], data);
+						if(_VERBOSE_) printf(" (elapsed %lld ms)", (t1 - t0) / 1000);	
+						SDM120CT_query_index ++;
+						if(SDM120CT_send_query() == 1) 
+						{
+							SDM120CT_query_index= 0; 
+							SDM120CT_send_query();
+						}
+					}
+				}
+				else
+					printf("\nERROR: CRC16 0x%4X  ErrorCheck 0x%4X", crc, ErrorCheck);
+			}
+			else
+				printf("\nERROR: Byte_Count %d bytes", Byte_Count);
+			fflush(stdout);
+        }
+    }
+    free(data);
+} // SDM120CT_RX_task
+
+void SDM120CT_create(void (*callback) (SDM120CT_sequence_phase_t), UBaseType_t uxPriority)
+{
+	// Init data
+	memset(&SDM120CT_data, 0, sizeof(struct SDM120CT_data_s));
+	memset(&SDM120CT_device_info, 0, sizeof(struct SDM120CT_device_info_s));
+
+	SDM120CT_callback= callback;
+	
+  	SDM120CT_query_index= -1,
+	SDM120CT_sequence_phase= INFO;
+ 	SDM120CT_query_list= ( uint16_t *) &SDM120CT_deviceinfo_query_list;	
+
+	// Init serial
+	SDM120CT_uart_init();
+	// TX/RX over serial
+	xTaskCreate(SDM120CT_RX_task, "SDM120CT_rx_task", 4*1024, NULL, uxPriority, NULL);
+	xTaskCreate(SDM120CT_TX_task, "SDM120CT_tx_task", 4*1024, NULL, uxPriority, NULL);
+} // SDM120CT_create
 
 // END OF FILE
