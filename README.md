@@ -116,7 +116,7 @@ The DDSU666H responds
 ### DDSU666-H register map
 Observed, not from manufactured spec.
 
-| Register (hex) |    Value       | units                            |
+| Register       | Value          | Units                            |
 | -------------- | -------------- | -------------------------------- |
 |          2000  |    voltage     | Volts (4-bytes floating decimal) |
 |          2002  |    current     | Amps (4-bytes floating decimal)  |
@@ -137,11 +137,11 @@ Observed, not from manufactured spec.
 |          2020  |  frecuency     | Hz (4-bytes floating decimal)    |
 
 
-| Register (hex) |    Value       | units                            |
-| -------------- | -------------- | -------------------------------- |
-|          4000  |  Active in electricity     |   |
-|          400A  |  Negative active energy     |   |
-|          4014  |  Positive active energy     |   |
+| Register       |  Value                      | Units                           |
+| -------------- | --------------------------- | ------------------------------- |
+|          4000  |  Active in electricity      | W (4-bytes floating decimal)    |
+|          400A  |  Negative active energy     | Wh (4-bytes floating decimal)   |
+|          4014  |  Positive active energy     | Wh (4-bytes floating decimal)   |
 
 
 
