@@ -41,7 +41,7 @@ The inverter sends		0B 03 20 06 00 02 2F 60
 The DDSU666H responds	0B 03 04 BE 0D 6A 16 4A B6
 ```
 
-#### (2) Multiple register from 2000 to 2020
+#### (2) Multiple registers from 2000 to 2020
 Around every 5 seconds the inverter sends a multiple register read from starting address 2000 for 34 (0022hex) positions = 17 registers
 ```
 The inverter sends    0B 03 20 00 00 22 CE B9
@@ -55,9 +55,9 @@ The DDSU666H responds
                       63 F0
 
                 byte  value			
-                00    0B	slave address
-                01    03	function code 	0x03 = Read Multiple Holding Registers
-                02    44  byte count = 44 hex (68 dec) bytes =>  68 / 4 bytes per register = 17 registers 2000 .. 2020
+                00    0B  slave address
+                01    03  function code 	0x03 = Read Multiple Holding Registers
+                02    44  byte count = 44 hex (68 dec) bytes =>  68 / 4 bytes per register = 17 registers
                       value (4 bytes)  register
                 03    43 68 33 33      2000
                       3F 16 45 A2      2002
@@ -78,7 +78,7 @@ The DDSU666H responds
                       42 47 F5 C3      2020
                       63 F0            CRC
 ```
-#### (3) Multiple register from 4000 to 401E
+#### (3) Multiple registers from 4000 to 401E
 Around every 10 seconds the inverter sends a multiple register read from starting address 4000 for 32 (0020hex) positions = 16 registers
 ```
 The inverter sends    0B 03 40 00 00 20 51 78
@@ -91,9 +91,9 @@ The DDSU666H responds
                       CE 89
 
                 byte  value			
-                00    0B	slave address
-                01    03	function code 	0x03 = Read Multiple Holding Registers
-                02    40  byte count = 40 hex (64 dec) bytes => 64 / 4 bytes = 16 registers 4000 .. 401E
+                00    0B  slave address
+                01    03  function code 	0x03 = Read Multiple Holding Registers
+                02    40  byte count = 40 hex (64 dec) bytes => 64 / 4 bytes = 16 registers
                       value (4 bytes)  register
                 03    C4 EA DB 33      4000
                       C4 EA DB 33      4002
@@ -114,7 +114,7 @@ The DDSU666H responds
                       CE 89            CRC
 ```
 
-### DDSU666-H register map
+### DDSU666-H registers map
 Observed, not from manufacturer spec.
 
 | Register       | Value          | Units                            |
@@ -146,9 +146,9 @@ Observed, not from manufacturer spec.
 
 
 ## Code
-The source is in C language 
+The source is in C language.
 
-The development environmentis the ESP-IDF. I am running ESP-IDF v5.4-dev-2194-gd7ca8b94c8 for Linux on a Raspberry Pi.
+The development environment is the ESP-IDF. I am running ESP-IDF v5.4-dev-2194-gd7ca8b94c8 for Linux on a Raspberry Pi.
 
 The IP connection is through Wi-Fi. You need to set your SSID and password in the file config.h
 
@@ -193,8 +193,9 @@ curl  -X GET http://192.168.1.110:80 -d '{"type":"device_info","key":"qWpJnwA0cr
 {"TCP":"ok","MQTT":"ok","WIFIlost":"0","TCPlost":"0"}
 ```
 The IP address of the device is reported via MQTT in the first PUBLISH message as follows:
-
+```console
 {"ip":"192.168.1.110","MAC":"B0:A7:32:27:FF:5C"}
+```
 
 
 ## Build
@@ -227,7 +228,7 @@ idf.py -p /dev/ttyUSB1 flash monitor
 
 
 ## Test
-Use an MQTT client to cusbscribe to the MQTT topic to receive the PUBLISH messages. You can use the Mosquitto client and the mosquitto_sub command as follows
+Use an MQTT client to cusbscribe to the MQTT topic to receive the PUBLISH messages. You can use the Mosquitto client and the mosquitto_sub command like this:
 
 ```console
 mosquitto_sub -d -t 'modbus2mqtt/set'
